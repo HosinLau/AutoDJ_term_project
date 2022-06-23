@@ -1,3 +1,6 @@
+## Notes by project owner HosinLau
+This project is based on an existing open source auto-DJ project developed by Len Vande Veire, and modified by Hosin Lau. Hosin added some transiton effects to the original project, and made slight modifications to the generation of music mix. Below shows the origial README file written by the original author.
+
 # Auto-DJ
 This repository contains the source code of the automatic DJ system developed by Len Vande Veire, under the supervision of prof. Tijl De Bie. It has been designed for Drum and Bass music, a sub-genre of Electronic Dance Music.
 
