@@ -52,7 +52,7 @@ if __name__ == '__main__':
 				logger.warning('Use the loaddir command to load some songs before playing!')
 				continue
 			
-			if len(cmd_split) > 1 and cmd_split[1] == 'save':
+			if len(cmd_split) > 1:
 				logger.info('Saving this new mix to disk!')
 				save_mix = True
 			else:
@@ -60,9 +60,42 @@ if __name__ == '__main__':
 				
 			logger.info('Starting playback!')
 			try:
-				dj.play(save_mix=save_mix)
+				dj.play(save_mix, False)
 			except Exception as e:
-				logger.error(e)
+		                logger.error(e)
+                elif cmd == 'assign':
+                        if len(sc.get_annotated()) == 0:
+                                logger.warning('Using default music folder /mnt/d/Music !')
+                                sc.load_directory('/mnt/d/Music')
+                                logger.info(str(len(sc.songs)) + ' songs loaded [annotated: ' + str(len(sc.get_annotated())) + ']')                             
+                        if len(cmd_split) < 3:
+                                logger.warning('Not enough parameters - please provide two song tracks!')
+                                continue
+                        else:
+                                save_mix = True 
+                        logger.info('Starting playback!')
+                        try:
+                                if len(cmd_split) == 3:
+                                    trans_type = None
+                                    logger.debug('use random transition type')
+                                elif cmd_split[3] == 'roll':
+                                    trans_type = 'rolling'
+                                elif cmd_split[3] == 'ddrop':
+                                    trans_type = 'double drop'
+                                else:
+                                    trans_type = 'relaxed'
+                                    logger.debug('using type chill')
+                                if len(cmd_split) == 4:
+                                    trans_effect = None
+                                    logger.debug('use random effect')
+                                elif cmd_split[4] == 'low_pass_echo' or cmd_split[4] == 'doppler' or cmd_split[4] == 'high_pass_echo' or cmd_split[4] == 'high_pass_drag' or cmd_split[4] == 'low_pass_enter':
+                                    trans_effect = cmd_split[4]
+                                else:
+                                    logger.debug('using normal transition without any effect')
+                                    trans_effect = 'normal'
+                                dj.play(True, True, cmd_split[1], cmd_split[2], trans_type, trans_effect)
+                        except Exception as e:
+                                logger.error(e)
 		elif cmd == 'pause':
 			logger.info('Pausing playback!')
 			try:

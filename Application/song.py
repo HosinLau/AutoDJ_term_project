@@ -56,11 +56,19 @@ class Song:
 		self.key = None
 		self.scale = None # Major or minor
 		self.spectralContrast = None
+                self.loop = 0
 		
 		# Features shared over different components (e.g. beat and downbeat tracking)
 		self.fft_phase_1024_512 = None
 		self.fft_mag_1024_512 = None
-	
+
+
+        def addLoop(self):
+            self.loop += 1
+
+        def clearLoop(self):
+            self.loop = 0
+
 	def getSegmentType(self, dbeat):
 		''' Get the segment type ('H' or 'L') of the segment the dbeat falls in '''	
 		for i in range(len(self.segment_types)-1):
@@ -335,13 +343,15 @@ class Song:
 		self.calculateSongThemeDescriptor()
 			
 	def openAudio(self):
-		#~ logger.debug('Opening audio ' + str(self.title))
+		logger.debug('Opening audio ' + str(self.title))
+                logger.debug(str(self))
 		loader = MonoLoader(filename = os.path.join(self.dir_, self.title + self.extension))
 		time0 = time.time()
 		audio = loader().astype('single')
 		time1 = time.time()
 		#~ logger.debug('Time waiting for audio loading: ' + str(time1-time0))
 		self.audio = normalizeAudioGain(audio, self.replaygain)
+                logger.debug(str(len(self.audio)))
 		if self.songBeginPadding > 0:
 			self.audio = np.append(np.zeros((1,self.songBeginPadding),dtype='single'), self.audio)
 	

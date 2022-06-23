@@ -21,9 +21,11 @@ from timestretching import time_stretch_sola, time_stretch_and_pitch_shift
 
 import logging
 logger = logging.getLogger('colorlogger')
+logging.basicConfig(filename="/home/hosin/log.txt")
 
 import time, os, sys
 import csv
+from scipy.io.wavfile import write
 
 from essentia.standard import MonoWriter
 
@@ -48,16 +50,33 @@ class DjController:
 		
 		self.save_mix = False
 		self.save_dir_idx = 0
-		self.save_dir = './mix_{}.mp3'
+		self.save_dir = '/home/hosin/mix_{}.wav'
 		self.save_dir_tracklist = './mix.txt'
 		self.audio_to_save = None
 		self.audio_save_queue = Queue(6)
 		self.save_tracklist = []
+
+                self.assign = False
+                self.master = None
+                self.slave = None
+                self.finished = False
 			
-	def play(self, save_mix = False):
+	def play(self, save_mix = False, assign = False, MASTER = None, SLAVE = None, TYPE = None, EFFECT = None):
 								
 		self.playEvent.set()
-			
+                self.assign = assign
+                self.master = MASTER
+                self.slave = SLAVE
+                self.type = TYPE
+                self.effect = EFFECT
+                if assign:
+                    self.save_dir = '/home/hosin/assigned_{}.wav'
+                    logger.debug('\nAssigning songs to concatenate...\n')
+                    logger.debug(MASTER)
+                    logger.debug(SLAVE)
+                    logger.debug(TYPE)
+                    logger.debug(EFFECT)
+           			
 		if self.dj_thread is None and self.audio_thread is None:
 			self.save_mix = save_mix
 			self.save_dir_idx = 0
@@ -86,10 +105,11 @@ class DjController:
 		self.audio_to_save.extend(audio)
 		self.save_tracklist.append(song_title)
 		
-		if len(self.audio_to_save) > 44100 * 60 * 15: # TODO test
+		if len(self.audio_to_save) > 44100 * 60 * 5 or (self.assign and self.finished): # TODO test
 			self.flush_audio_to_queue()
 			
-	def flush_audio_to_queue(self):
+        def flush_audio_to_queue(self):
+                logger.debug('\n\nflush audio to queue\n\n')
 		self.save_dir_idx += 1
 		self.audio_save_queue.put((self.save_dir.format(self.save_dir_idx), np.array(self.audio_to_save,dtype='single'), self.save_tracklist))
 		self.audio_to_save = []
@@ -100,14 +120,15 @@ class DjController:
 		while True:
 			filename, audio, tracklist = queue.get()
 			if not (filename is None):
-				logger.debug('Saving {} to disk'.format(filename))
-				writer = MonoWriter(filename=filename, bitrate=320,format='mp3')
-				writer(np.array(audio,dtype='single'))
+				logger.debug('\n~~~~~ Saving {} to disk ~~~~~\n'.format(filename))
+				#writer = MonoWriter(filename=filename, bitrate=320,format='mp3')
+				#writer(np.array(audio,dtype='single'))
+                                write(filename, 44100, audio)
 				# Save tracklist
-				with open(self.save_dir_tracklist,'a+') as csvfile:
-					writer = csv.writer(csvfile)
-					for line in tracklist:
-						writer.writerow([line])
+				#with open(self.save_dir_tracklist,'a+') as csvfile:
+				#	writer = csv.writer(csvfile)
+				#	for line in tracklist:
+				#		writer.writerow([line])
 			else:
 				logger.debug('Stopping audio saving thread!')
 				return
@@ -174,11 +195,11 @@ class DjController:
 			os.close(null_fds[0])
 			os.close(null_fds[1])
 			
-		if self.stream is None:
-			self.stream = self.pyaudio.open(format = pyaudio.paFloat32,
-						channels=1,
-						rate=44100,
-						output=True)
+		#if self.stream is None:
+			#self.stream = self.pyaudio.open(format = pyaudio.paFloat32,
+			#			channels=1,
+			#			rate=44100,
+			#			output=True)
 						
 		while isPlaying.value:
 			toPlay, toPlayStr, masterTitle = self.queue.get()
@@ -204,7 +225,7 @@ class DjController:
 				toPlayNow = toPlay[cur_idx:end_idx]
 				if toPlayNow.dtype != 'float32':
 					toPlayNow = toPlayNow.astype('float32')
-				self.stream.write(toPlayNow, num_frames=len(toPlayNow), exception_on_underflow=False)
+				#self.stream.write(toPlayNow, num_frames=len(toPlayNow), exception_on_underflow=False)
 			
 	def _dj_loop(self, isPlaying):
 		
@@ -249,30 +270,31 @@ class DjController:
 			self.save_tracklist = []
 		
 		# Set parameters for the first song
-		current_song = self.tracklister.getFirstSong()
-		current_song.open()
+                current_song = self.tracklister.getFirstSong(self.master)
+                current_song.open()
 		current_song.openAudio()
+                current_song.addLoop()
 		anchor_sample = 0
 		cue_master_in = current_song.segment_indices[0] # Start at least 32 downbeat into the first song, enough time to fill the buffer
 		fade_in_len = 16
 		prev_fade_type = tracklister.TYPE_CHILL
 		logger.debug('FIRST SONG: {}'.format(current_song.title))
 		
-		cue_master_out, next_fade_type, max_fade_in_len, fade_out_len = tracklister.getMasterQueue(current_song, cue_master_in + fade_in_len, prev_fade_type)
-		next_song, cue_next_in, cue_master_out, fade_in_len, semitone_offset = self.tracklister.getBestNextSongAndCrossfade(current_song, cue_master_out, max_fade_in_len, fade_out_len, next_fade_type)		
-		song_titles_in_buffer.append(current_song.title)
-		add_song_to_tracklist(current_song, anchor_sample, next_song, next_fade_type, cue_master_out, fade_in_len, fade_out_len)
+		cue_master_out, next_fade_type, max_fade_in_len, fade_out_len = tracklister.getMasterQueue(current_song, cue_master_in + fade_in_len, prev_fade_type, self.type)
+                next_song, cue_next_in, cue_master_out, fade_in_len, semitone_offset = self.tracklister.getBestNextSongAndCrossfade(current_song, cue_master_out, max_fade_in_len, fade_out_len, next_fade_type, self.slave)
+                song_titles_in_buffer.append(current_song.title)
+                add_song_to_tracklist(current_song, anchor_sample, next_song, next_fade_type, cue_master_out, fade_in_len, fade_out_len)
 		prev_in_or_out = 'in'
 			
 		f = current_song.tempo / TEMPO		
 		current_audio_start = 0
 		current_audio_end = int((current_song.downbeats[cue_master_out] * 44100) + (fade_in_len + fade_out_len + 2)*samples_per_dbeat/f)
-		current_audio_stretched = time_stretch_and_pitch_shift(current_song.audio[current_audio_start:current_audio_end], f)
+                current_audio_stretched = time_stretch_and_pitch_shift(current_song.audio[current_audio_start:current_audio_end], f)
 		
 		mix_buffer = current_audio_stretched
 		mix_buffer_cf_start_sample = int(f * (current_song.downbeats[cue_master_out] * 44100))
 		
-		while True:
+		while not self.finished:
 			
 			# Cue the audio from the previous event point till the current event point.
 			# The "type" of audio (one song added, one song less, or change of master) is determined
@@ -292,15 +314,18 @@ class DjController:
 				elif prev_in_or_out == 'switch':
 					songs_playing_master += 1
 				prev_in_or_out = in_or_out
-				
+                                toPlay = mix_buffer[prev_end_sample : end_sample]
+
 				# If its a double drop, then end_sample and prev_end_sample might be the same! Don't queue empty segments..
 				if end_sample > prev_end_sample:
-					toPlay = mix_buffer[prev_end_sample : end_sample]
+                                        logger.debug('\n\nto play has length = ' + str(len(toPlay)))
 					cur_fade_type_str = cur_fade_type if num_songs_playing > 1 else ''
 					toPlayTuple = (toPlay,curPlayingString(cur_fade_type_str), song_titles_in_buffer[songs_playing_master])
 					# Save the audio if necessary
 					if self.save_mix:
+                                                logger.debug('\n\nsaving audio to disk')
 						self.save_audio_to_disk(toPlay, current_song.title)
+                                                logger.debug('\n' + current_song.title)
 					# Play this audio
 					self.queue.put(toPlayTuple, isPlaying.value)	# Block until slot available, unless audio has stopped: this might raise an exception which is caught below
 					prev_end_sample = end_sample
@@ -308,8 +333,20 @@ class DjController:
 			tracklist_changes = [(tc[0] - mix_buffer_cf_start_sample, tc[1],tc[2]) for tc in tracklist_changes if tc[0] > mix_buffer_cf_start_sample]	
 			mix_buffer = mix_buffer[ mix_buffer_cf_start_sample : ]
 			current_song.close()
-			
+
 			# Go to next song, and select the song after that
+                        if current_song.title == next_song.title:
+                            current_song.addLoop()
+                            logger.debug('\n~~~~~ Looping this song! ~~~~~\n')
+                        else:
+                            current_song.clearLoop()
+                            logger.debug('prev and next')
+                            logger.debug(current_song.title)
+                            logger.debug(next_song.title)
+                        if current_song.title == self.slave:
+                            self.finished = True
+                            logger.debug('\n\n~~~~~ Songs Merged ~~~~~\n\n')
+                            self.save_audio_to_disk(toPlay, 'assigned mix')
 			current_song = next_song
 			current_song.open()
 			f = current_song.tempo / TEMPO	
@@ -318,7 +355,7 @@ class DjController:
 			prev_fade_in_len = fade_in_len
 			prev_fade_out_len = fade_out_len
 			
-			cue_master_out, next_fade_type, max_fade_in_len, fade_out_len = tracklister.getMasterQueue(current_song, cue_master_in + fade_in_len, prev_fade_type)
+			cue_master_out, next_fade_type, max_fade_in_len, fade_out_len = tracklister.getMasterQueue(current_song, cue_master_in + fade_in_len, prev_fade_type, self.type)
 			next_song, cue_next_in, cue_master_out, fade_in_len, semitone_offset = self.tracklister.getBestNextSongAndCrossfade(current_song, cue_master_out, max_fade_in_len, fade_out_len, next_fade_type)
 			anchor_sample = int(44100 * current_song.downbeats[cue_master_in])		
 			add_song_to_tracklist(current_song, anchor_sample, next_song, next_fade_type, cue_master_out, fade_in_len, fade_out_len)	
@@ -333,6 +370,6 @@ class DjController:
 			# Calculate crossfade between *previous* song and current song
 			cf = songtransitions.CrossFade(0, [0], prev_fade_in_len + prev_fade_out_len, prev_fade_in_len, prev_fade_type)
 			mix_buffer_deepcpy = np.array(mix_buffer,dtype='single',copy=True)
-			mix_buffer = cf.apply(mix_buffer_deepcpy, current_audio_stretched, TEMPO)
+			mix_buffer = cf.apply(mix_buffer_deepcpy, current_audio_stretched, TEMPO, self.effect)
 			
 		

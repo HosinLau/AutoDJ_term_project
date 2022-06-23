@@ -141,7 +141,7 @@ class StructuralSegmentator:
 
 		# Determine the most dominant peaks and see if they lie at a multiple of 8 downbeats from each 
 		# Assumption 1: high peaks are important; assumption 2: they should lie at multiples of 8 downbeats (phrase) from each other
-		NUM_HIGHEST_PEAKS = 20
+		NUM_HIGHEST_PEAKS = 30
 		highest_peaks_db_indices = (peaks_pos_dbindex[np.argsort(peaks_ampl_modified)])[-NUM_HIGHEST_PEAKS:]
 		highest_peaks_amplitudes = (peaks_ampl_modified[np.argsort(peaks_ampl_modified)])[-NUM_HIGHEST_PEAKS:]
 		distances = []			# Number of total peaks at multiple of 4

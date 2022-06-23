@@ -22,6 +22,20 @@ def get_key(key, scale, offset, switchMajorMinor = False):
 	return circle_of_fifths[scale2][idx], scale2
 	
 def get_key_transposed(key, scale, semitones):
+        if key == 'Ab':
+            key = 'G#'
+        elif key == 'Bb':
+            key = 'A#'
+        elif key == 'Cb':
+            key = 'B'
+        elif key == 'Db':
+            key = 'C#'
+        elif key == 'Eb':
+            key = 'D#'
+        elif key == 'Fb':
+            key = 'E'
+        elif key == 'Gb':
+            key = 'F#'
 	idx = notes.index(key)
 	return notes[(idx + semitones)%12], scale
 	

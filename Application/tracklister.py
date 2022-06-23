@@ -15,6 +15,7 @@ import random
 
 import logging
 logger = logging.getLogger('colorlogger')
+logging.basicConfig(filename="/home/hosin/log.txt")
 
 # ------------------- CONSTANTS AND PARAMETERS ------------------------
 
@@ -23,24 +24,24 @@ TYPE_ROLLING = 'rolling'
 TYPE_CHILL = 'relaxed'
 
 TRANSITION_PROBAS = {
-	TYPE_CHILL : [0.0, 0.7, 0.3],	# chill -> chill, rolling, ddrop
-	TYPE_ROLLING : [0.2, 0.8, 0.0], # rolling> chill, rolling, ddrop
-	TYPE_DOUBLE_DROP : [0.2, 0.8, 0.0] # ddrop -> chill, rolling, ddrop
+	TYPE_CHILL : [0.2, 0.5, 0.3],	# chill -> chill, rolling, ddrop
+	TYPE_ROLLING : [0.3, 0.6, 0.1], # rolling> chill, rolling, ddrop
+	TYPE_DOUBLE_DROP : [0.2, 0.7, 0.1] # ddrop -> chill, rolling, ddrop
 	}
 
-LENGTH_ROLLING_IN = 16
-LENGTH_ROLLING_OUT = 16
+LENGTH_ROLLING_IN = 8
+LENGTH_ROLLING_OUT = 8
 LENGTH_DOUBLE_DROP_IN = LENGTH_ROLLING_IN
-LENGTH_DOUBLE_DROP_OUT = 32
-LENGTH_CHILL_IN = 16
-LENGTH_CHILL_OUT = 16
+LENGTH_DOUBLE_DROP_OUT = 8
+LENGTH_CHILL_IN = 4
+LENGTH_CHILL_OUT = 8
 	
 THEME_WEIGHT = 0.4
 PREV_SONG_WEIGHT = - 0.1 * (1-THEME_WEIGHT)
 CURRENT_SONG_WEIGHT = 1 - (THEME_WEIGHT + PREV_SONG_WEIGHT)
 
-NUM_SONGS_IN_KEY_MINIMUM = 15	# Used for song selection: the minimum number of songs that the tracklister attempts to add to the next song candidate pool
-NUM_SONGS_ONSETS = 6			# Used for song selection: the number of songs of which the ODFs have to be matched with the master
+NUM_SONGS_IN_KEY_MINIMUM = 20	# Used for song selection: the minimum number of songs that the tracklister attempts to add to the next song candidate pool
+NUM_SONGS_ONSETS = 10			# Used for song selection: the number of songs of which the ODFs have to be matched with the master
 MAX_SONGS_IN_SAME_KEY = 6		# Used for song selection: how many times songs in the same key can be played after each other
 
 ROLLING_START_OFFSET = LENGTH_ROLLING_IN + LENGTH_ROLLING_OUT 	# Start N downbeats after previous queue point.
@@ -48,7 +49,10 @@ ROLLING_START_OFFSET = LENGTH_ROLLING_IN + LENGTH_ROLLING_OUT 	# Start N downbea
 def is_vocal_clash_pred(master,slave):
 	master = 2*master[1:-1] + master[:-2] + master[2:] >= 2
 	slave = 2*slave[1:-1] + slave[:-2] + slave[2:] >= 2
-	return sum(np.logical_and(master,slave)) >= 2
+        longer = max(np.shape(master)[0], np.shape(slave)[0])
+        master_pad = np.pad(master, (0, longer-np.shape(master)[0]), mode='constant')
+        slave_pad = np.pad(slave, (0, longer-np.shape(slave)[0]), mode='constant')
+	return sum(np.logical_and(master_pad,slave_pad)) >= 2
 	
 # Helper functions for getting the right downbeat positions		
 def getDbeatAfter(song, dbeat, options, n=1):
@@ -138,7 +142,7 @@ def getAllSlaveCues(song, fade_type, min_playable_length = 32):
 	return zip(cues, fade_in_lengths)
 	
 
-def getMasterQueue(song, start_dbeat, cur_fade_type):
+def getMasterQueue(song, start_dbeat, cur_fade_type, assigned_fade_type=None):
 	
 	'''
 		Get the (potential) next queue point
@@ -158,13 +162,14 @@ def getMasterQueue(song, start_dbeat, cur_fade_type):
 	# Determine if this should (and can) be a double drop
 	# If there are no 'H' segments anymore, then double drop is impossible
 	# If the next 'H' segment is too late in the song (less than 32 downbeats before the last L segment), then this doesn't make sense either
-	if P_ddrop > 0:
-		
+	if assigned_fade_type != 'rolling' and assigned_fade_type != 'relaxed' and P_ddrop > 0:
+	
 		isDoubleDrop = (random.random() <= P_ddrop)
 		cues = getAllMasterSwitchPoints(song, TYPE_DOUBLE_DROP)
 		cues = [c for c in cues if c[0] >= start_dbeat]
 		
-		if isDoubleDrop and len(cues) != 0:
+		if (isDoubleDrop or assigned_fade_type == 'double drop') and len(cues) != 0:
+                        logger.debug('applying fade type double drop')
 			doubleDropDbeat, max_fade_in_len, fade_out_len = cues[0]
 			max_fade_in_len = min(max_fade_in_len, doubleDropDbeat - start_dbeat - 1)
 			return doubleDropDbeat - max_fade_in_len, TYPE_DOUBLE_DROP, max_fade_in_len, fade_out_len
@@ -172,13 +177,14 @@ def getMasterQueue(song, start_dbeat, cur_fade_type):
 	P_roll = P_roll / (P_roll + P_chill)
 	P_chill = P_chill / (P_roll + P_chill)
 	
-	if P_roll > 0:	
+	if assigned_fade_type != 'relaxed' and P_roll > 0:	
 		
 		isRolling = (random.random() <= P_roll)
 		cues = getAllMasterSwitchPoints(song, TYPE_ROLLING)
 		cues = [c for c in cues if c[0] >= start_dbeat + ROLLING_START_OFFSET - 1]
 		
-		if isRolling and len(cues) != 0:
+		if (isRolling or assigned_fade_type == 'rolling') and len(cues) != 0:
+                        logger.debug('applying fade type roll')
 			rollingDbeat, max_fade_in_len, fade_out_len = cues[0]
 			max_fade_in_len = min(max_fade_in_len, rollingDbeat - start_dbeat - 1)
 			return rollingDbeat - max_fade_in_len, TYPE_ROLLING, max_fade_in_len, fade_out_len
@@ -188,6 +194,7 @@ def getMasterQueue(song, start_dbeat, cur_fade_type):
 		if True:	
 			# Transition point: first low segment after the first high segment (or this dbeat if it is H)
 			# The song must play a bit before doing a chill transition!
+                        logger.debug('applying fade type chill')
 			cues = getAllMasterSwitchPoints(song, TYPE_CHILL)
 			cues = [c for c in cues if c[0] >= start_dbeat]
 			if len(cues) == 0:
@@ -197,15 +204,18 @@ def getMasterQueue(song, start_dbeat, cur_fade_type):
 			max_fade_in_len = min(max_fade_in_len, cue - start_dbeat)
 			return cue - max_fade_in_len, TYPE_CHILL, max_fade_in_len, fade_out_len
 
-def getSlaveQueue(song, fade_type, min_playable_length = 32):
+def getSlaveQueue(song, fade_type, min_playable_length = 32, assigned=False):
 	''' Search the slave song for a good transition point with type fade_type (chill, rolling, double drop) '''
 
 	cues = getAllSlaveCues(song, fade_type, min_playable_length)
 	
 	if fade_type == TYPE_DOUBLE_DROP or fade_type == TYPE_ROLLING:
-		if len(cues) > 0:
+		if len(cues) > 0 and not assigned:
 			cue, fade_in_len = cues[np.random.randint(len(cues))]	# -1 to switch just before drop
 			return cue, fade_in_len
+                elif assigned:
+                         cue, fade_in_len = cues[0]
+                         return cue, fade_in_len
 		else:
 			cues = getAllSlaveCues(song, TYPE_CHILL, min_playable_length)
 			logger.debug('Warning: no H dbeats!')
@@ -284,16 +294,21 @@ class TrackLister:
 		self.songsPlayed = []									# List of songs already played
 		self.song_file_idx = 0
 		self.semitone_offset = 0
-		
+		self.master = None
 		self.theme_centroid = None
 		self.prev_song_theme_descriptor = None
 		
-	def getFirstSong(self):
-			
+	def getFirstSong(self, MASTER):
+	        self.master = MASTER
+
 		# Do some initialization and return the first song to be played
 		self.songsUnplayed = self.song_collection.get_annotated()	# Subset of song collection containing all unplayed songs
-		firstSong = np.random.choice(self.songsUnplayed, size=1)[0]
-		#~ firstSong = [s for s in self.songsUnplayed if 'Crude Tactics' in s.title][0]
+                if self.master is not None:
+                    titles = [song.title for song in self.songsUnplayed]
+                    firstSong = self.songsUnplayed[titles.index(self.master)]
+                else:
+                    firstSong = np.random.choice(self.songsUnplayed, size=1)[0]
+		    #~ firstSong = [s for s in self.songsUnplayed if 'Crude Tactics' in s.title][0]
 		self.songsUnplayed.remove(firstSong)
 		self.songsPlayed.append(firstSong)
 		firstSong.open()
@@ -373,19 +388,19 @@ class TrackLister:
 		song_options_closest_to_centroid = np.argsort(song_options_distance_to_centroid)
 		
 		# Log messages
-		logger.debug('Selected songs, ordered by theme similarity:')
+		logger.debug('\nSelected songs, ordered by theme similarity:')
 		for i in song_options_closest_to_centroid[:NUM_SONGS_ONSETS]:
 			song_options[i].open()
 			title = song_options[i].title
 			dist_to_centroid = song_options_distance_to_centroid[i]
 			key = song_options[i].key
 			scale = song_options[i].scale
-			logger.debug('>> Theme difference {:20s} : {:.2f} ({} {})'.format(title[:20], dist_to_centroid, key, scale))
+			logger.debug('>> Theme difference {:30s} : {:.2f} ({} {})'.format(title[:30], dist_to_centroid, key, scale))
 			song_options[i].close()
 			
 		return song_options[song_options_closest_to_centroid[:NUM_SONGS_ONSETS]]
 		
-	def getBestNextSongAndCrossfade(self, master_song, master_cue, master_fade_in_len, fade_out_len, fade_type):
+	def getBestNextSongAndCrossfade(self, master_song, master_cue, master_fade_in_len, fade_out_len, fade_type, SLAVE = None):
 		'''
 			Choose a song that overlaps best with the given song
 			The type of transition is also given (rolling, double drop, chill).
@@ -394,26 +409,47 @@ class TrackLister:
 		
 		# 1. Select songs that are similar in key and that build up towards the goal song
 		key, scale = songcollection.get_key_transposed(master_song.key, master_song.scale, self.semitone_offset)
-		song_options = self.getSongOptionsInKey(key, scale)
+                if key == 'Ab':
+                    key = 'G#'
+                elif key == 'Bb':
+                    key = 'A#'
+                elif key == 'Cb':
+                    key = 'B'
+                elif key == 'Db':
+                    key = 'C#'
+                elif key == 'Eb':
+                    key = 'D#'
+                elif key == 'Fb':
+                    key = 'E'
+                elif key == 'Gb':
+                    key = 'F#'
+                song_options = self.getSongOptionsInKey(key, scale)
 		closely_related_keys = songcollection.get_closely_related_keys(key, scale)
 		
 		# 2. Filter the songs in key based on their distance to the centroid
 		song_options = self.filterSongOptionsByThemeDistance(song_options, master_song)
 		#~ song_options = np.random.choice(song_options, size=NUM_SONGS_ONSETS)
-			
+
+                if master_song.loop < 3:
+                    logger.debug('--- same song considered next ---')
+                    song_options = np.append(song_options, copy(master_song)) # allowing for self loop
+		
+                if SLAVE is not None: # make slave the remaining option
+                    titles = [song.title for song in self.songsUnplayed]
+                    song_options = [self.songsUnplayed[titles.index(SLAVE)]]
 		# 3. Filter based on vocal activity and ODF overlap
 		master_song.open()
 		best_score = np.inf
 		best_score_clash = np.inf
 		best_song = None
-		logger.debug('Selected songs, evaluated by ODF similarity: ')
+		logger.debug('\nSelected songs, evaluated by ODF similarity: ')
 		for s in song_options:
 			# Open the song
 			next_song = s
 			next_song.open()
 			
 			# Determine the queue points for the current song
-			queue_slave, fade_in_len = getSlaveQueue(next_song, fade_type, min_playable_length = transition_length + 16)
+			queue_slave, fade_in_len = getSlaveQueue(next_song, fade_type, transition_length + 16, SLAVE is not None)
 			fade_in_len = min(fade_in_len, master_fade_in_len)
 			fade_in_len_correction = master_fade_in_len - fade_in_len
 			master_cue_corr = master_cue + fade_in_len_correction
@@ -428,7 +464,7 @@ class TrackLister:
 				
 			# Iterate over the different options for queue_slave
 			for queue_slave_cur in cf.queue_2_options:
-				
+                               			
 				# Split the overlapping portions of the onset curves in segments of 4 downbeats
 				# and calculate the similarities. The most dissimilar segment indicates the overall quality of the crossfade
 				
@@ -461,8 +497,8 @@ class TrackLister:
 					best_slave_cue_clash = queue_slave_cur
 					best_master_cue_clash = master_cue_corr
 				
-				type_fade_dbg_str = '>> {:20s} [{}:{:3d}]: ODF {:.2f} {}'.format(
-					next_song.title[:20], 
+				type_fade_dbg_str = '>> {:30s} [{}:{:3d}]: ODF {:.2f} {}'.format(
+					next_song.title[:30], 
 					fade_type, 
 					queue_slave_cur, 
 					score, 
@@ -479,8 +515,25 @@ class TrackLister:
 			best_fade_in_len = best_fade_in_len_clash
 			best_slave_cue = best_slave_cue_clash
 			best_master_cue = best_master_cue_clash
+
+                if best_song.title == master_song.title:
+                        best_song = master_song
 		
 		# Determine the pitch shifting factor for the next song
+                if best_song.key == 'Ab':
+                    best_song.key = 'G#'
+                elif best_song.key == 'Bb':
+                    best_song.key = 'A#'
+                elif best_song.key == 'Cb':
+                    best_song.key = 'B'
+                elif best_song.key == 'Db':
+                    best_song.key = 'C#'
+                elif best_song.key == 'Eb': 
+                    best_song.key = 'D#'
+                elif best_song.key == 'Fb':
+                    best_song.key = 'E'
+                elif best_song.key == 'Gb':
+                    best_song.key = 'F#'
 		key_distance = abs(songcollection.distance_keys_semitones(key, best_song.key))
 		if (best_song.key, best_song.scale) not in closely_related_keys:
 			# This song has been shifted one semitone up or down: this has to be compensated by means of pitch shifting
@@ -495,7 +548,8 @@ class TrackLister:
 			
 		self.prev_song_theme_descriptor = master_song.song_theme_descriptor
 		self.songsPlayed.append(best_song)
-		self.songsUnplayed.remove(best_song)
+                if self.songsUnplayed.count(best_song) > 0:
+    	            self.songsUnplayed.remove(best_song)
 		if len(self.songsUnplayed) <= NUM_SONGS_IN_KEY_MINIMUM: # If there are too few songs remaining, then restart
 			logger.debug('Replenishing song pool')
 			self.songsUnplayed.extend(self.songsPlayed)
