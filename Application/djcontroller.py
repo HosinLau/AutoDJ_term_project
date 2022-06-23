@@ -21,7 +21,7 @@ from timestretching import time_stretch_sola, time_stretch_and_pitch_shift
 
 import logging
 logger = logging.getLogger('colorlogger')
-logging.basicConfig(filename="/home/hosin/log.txt")
+#logging.basicConfig(filename="/home/hosin/log.txt")
 
 import time, os, sys
 import csv
@@ -50,7 +50,7 @@ class DjController:
 		
 		self.save_mix = False
 		self.save_dir_idx = 0
-		self.save_dir = '/home/hosin/mix_{}.wav'
+		self.save_dir = './mix_{}.wav'
 		self.save_dir_tracklist = './mix.txt'
 		self.audio_to_save = None
 		self.audio_save_queue = Queue(6)
@@ -70,7 +70,7 @@ class DjController:
                 self.type = TYPE
                 self.effect = EFFECT
                 if assign:
-                    self.save_dir = '/home/hosin/assigned_{}.wav'
+                    self.save_dir = './assigned_{}.wav'
                     logger.debug('\nAssigning songs to concatenate...\n')
                     logger.debug(MASTER)
                     logger.debug(SLAVE)
