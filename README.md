@@ -1,5 +1,5 @@
 ## Notes by repo owner HosinLau
-This project is based on an existing open source auto-DJ project developed by Len Vande Veire, and modified by Hosin Lau. Their project can be found in (https://github.com/aida-ugent/dnb-autodj). Hosin added some transiton effects to the original project (mainly in 'songtransitions.py'), and made slight modifications to the generation process of music mix. Below shows the origial README file written by the original author.
+This project is based on an existing open source auto-DJ project developed by Len Vande Veire, and modified by Hosin Lau. Their project can be found in (https://github.com/aida-ugent/dnb-autodj). Hosin added some transiton effects to the original project (mainly in 'songtransitions.py'), and made slight modifications to the generation process of music mix. More about the changes can be found in 'README_by_HosinLau.md'. Below shows the origial README file written by the original author.
 
 # Auto-DJ
 This repository contains the source code of the automatic DJ system developed by Len Vande Veire, under the supervision of prof. Tijl De Bie. It has been designed for Drum and Bass music, a sub-genre of Electronic Dance Music.
