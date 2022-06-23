@@ -1,4 +1,4 @@
-## Notes by project owner HosinLau
+## Notes by repo owner HosinLau
 This project is based on an existing open source auto-DJ project developed by Len Vande Veire, and modified by Hosin Lau. Their project can be found in (https://github.com/aida-ugent/dnb-autodj). Hosin added some transiton effects to the original project, and made slight modifications to the generation of music mix. Below shows the origial README file written by the original author.
 
 # Auto-DJ
