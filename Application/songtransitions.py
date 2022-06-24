@@ -38,7 +38,7 @@ def high_pass_drag(master_audio_clip, length):
     original = master_audio_clip.tolist()
     audio = list(original)
     for i in range(16):
-        high_pass_filter.high_pass(44100, min(3000, 500 + i * 300), 1.0 / np.sqrt(2))
+        high_pass_filter.high_pass(44100, min(2500, 500 + i * 200), 1.0 / np.sqrt(2))
         start = len(master_audio_clip) * i/16
         end = len(master_audio_clip) * (i+1)/16
         drag = [a * 0.5 for a in scipy.signal.lfilter(high_pass_filter._b_coeffs, high_pass_filter._a_coeffs, original[start:end])]
