@@ -50,12 +50,12 @@ def high_pass_drag(master_audio_clip, length):
 
 def low_pass_enter(slave_audio_clip, length):
     low_pass_filter = yodel.filter.Biquad()
-    low_pass_filter.low_pass(44100, 2000, 1.0 / np.sqrt(2))
+    low_pass_filter.low_pass(44100, 1000, 1.0 / np.sqrt(2))
     original = slave_audio_clip.tolist()
     audio = [0 for t in range(length)]
     audio[:low_pass_enter_span] = [a * 2 for a in scipy.signal.lfilter(low_pass_filter._b_coeffs, low_pass_filter._a_coeffs, original[:low_pass_enter_span])]
     for i in range(10):
-        low_pass_filter.low_pass(44100, 1000 + i * 300, 1.0 / np.sqrt(2))
+        low_pass_filter.low_pass(44100, 1000 + i * 500, 1.0 / np.sqrt(2))
         start = (length-low_pass_enter_span)*i/10
         end = low_pass_enter_span+(length-low_pass_enter_span)*(i+1)/10
         audio[start:end] = [a * (2 - i * 0.1) for a in scipy.signal.lfilter(low_pass_filter._b_coeffs, low_pass_filter._a_coeffs, original[start:end])]
