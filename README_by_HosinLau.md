@@ -12,5 +12,5 @@ If want for random, leave it blank. If want to use normal transition without any
 I implemented this project on a Windows Subsystem for Linux (WSL). (Ubuntu 20.04.4 LTS)
 To handle some difficulties running this program on a WSL, I disabled the audio output for music playing. To re-enable music playing, 
 users can uncomment the lines 198~202 in file 'djcontroller.py', specifically the function 'self.stream = self.pyaudio.open(...)'.
-Even though audio output is disabled, users can still find the composed tracks in their folder. Names are 'mix{}.wav' for random continuous mixes and
-'assigned{}.wav' for assigned mixes.
+Even though audio output is disabled, users can still find the composed tracks in their folder. Names are 'mix_{ }.wav' for random continuous mixes and
+'assigned_{ }.wav' for assigned mixes.
