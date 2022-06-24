@@ -17,7 +17,7 @@ logger = logging.getLogger('colorlogger')
 logging.basicConfig(filename="/home/hosin/log.txt")
 
 doppler_prob = 0.15
-doppler_span = 1
+doppler_span = 1.5
 doppler_stages = 16
 
 high_pass_echo_prob = 0.15
